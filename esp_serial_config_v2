@@ -1,0 +1,195 @@
+//not working yet
+#include <EEPROM.h>
+#include "ESP8266WiFi.h"
+//global variable
+char *ssid;
+char *pass;
+boolean isDataSave = false;
+
+void setup() {
+  Serial.begin(115200);
+  EEPROM.begin(512);
+  // Set WiFi to station mode and disconnect from an AP if it was previously connected
+  wifiInit();
+  delay(100);
+  Serial.println("Setup done");
+}
+
+void loop() {
+  configWifi();
+  delay(10);
+}
+void wifiInit() {
+  isDataSave = readMemo(); //check if there is ssid and password save
+  if (isDataSave) {
+    WiFi.begin ( ssid, pass ); //maybe reset is needed
+    while ( WiFi.status() != WL_CONNECTED ) {
+      delay ( 200 );
+      Serial.print( "." );
+    }
+    Serial.println("");
+    Serial.println( "Connected to " );
+    Serial.println( ssid );
+    Serial.println( "IP address: " );
+    Serial.println( WiFi.localIP() );
+    Serial.println( "HTTP server started" );
+  }
+  else {
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+  }
+  delay(10);
+}
+boolean wifiScan() {
+  Serial.println("scan start");
+
+  // WiFi.scanNetworks will return the number of networks found
+  int n = WiFi.scanNetworks();
+  Serial.println("scan done");
+  if (n == 0) {
+    Serial.println("no networks found");
+    return false;
+  }
+  else
+  {
+    Serial.print(n);
+    Serial.println(" networks found");
+    for (int i = 0; i < n; ++i)
+    {
+      // Print SSID and RSSI for each network found
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(WiFi.SSID(i));
+      Serial.print(" (");
+      Serial.print(WiFi.RSSI(i));
+      Serial.print(")");
+      Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*");
+      delay(10);
+    }
+    return true;
+  }
+  Serial.println("");
+
+  // Wait a bit before scanning again
+  delay(5000);
+}
+int configWifi() {
+  char in = getSerial();
+  if (in >= 'a' && in <= 'z') {
+    switch (in) {
+      case 'h':
+        Serial.println("s=scan WIFI network");
+        break;
+      case 's':
+        while (!wifiScan());
+        getConfig();
+        break;
+    }
+  }
+
+}
+void getConfig() {
+  int i = 0;
+  char in;
+  String pwd = "";
+  boolean isPass = true;
+  Serial.println("enter the number of network you wish to connect:");
+  i = getIntSerial();
+  Serial.println("is password needed? (y/n)");
+  in = getCharSerial();
+  if (in == 'y') {
+    pwd = getStringSerial();
+  }
+  else {
+    isPass = false;
+  }
+  if(isPass){
+  pwd.toCharArray(pass, pwd.length());
+  }
+  else{pass=0;}
+  String sid = WiFi.SSID(i);
+  sid.toCharArray(ssid, sid.length());
+}
+
+char getSerial() {
+  char in = Serial.read();
+  return in;
+}
+char getCharSerial() {
+  char endOfLine = '\n';
+  char in;
+  while (endOfLine != in) {
+    in = getSerial();
+    if (in >= 'a' && in <= 'z') {
+      return in;
+    }
+    delay(10);
+  }
+  return 0;
+}
+int getIntSerial() {
+  char endOfLine = '\n';
+  char in;
+  while (endOfLine != in) {
+    in = getSerial();
+    if (in >= '0' && in <= '9') {
+      return in - '0';
+    }
+    delay(10);
+  }
+  return 0;
+}
+String getStringSerial() {
+  char endOfLine = '\n';
+  String s = "";
+  char in;
+  while (endOfLine != in) {
+    in = getSerial();
+    if (in >= '0' && in <= 'z') {
+      s += in;
+    }
+    delay(10);
+  }
+  return s;
+}
+boolean readMemo() {
+  char div = ' ';
+  int  addr = 0;
+  String ss = "", pwd = "";
+  while (div != '#') {
+    div =  EEPROM.read(addr);
+    ss += div;
+    addr++;
+  }
+  addr++;
+  while (div != '#') {
+    div =  EEPROM.read(addr);
+    pwd += div;
+    addr++;
+  }
+  if (ss.length() <= 1) {
+    return false;
+  }
+  pwd.toCharArray(pass, pwd.length());
+  ss.toCharArray(ssid, ss.length());
+  return true;
+}
+boolean writeMemo(String ss, String pwd) {
+  int addr = 0;
+  int size = ss.length();
+  while (addr < size) {
+    EEPROM.write(addr, ss.charAt(addr));
+    addr++;
+  }
+  EEPROM.write(addr, '#');//divider #
+  addr++;
+  size = pwd.length();
+  int i = 0;
+  while (i < size) {
+    EEPROM.write(addr, pwd.charAt(i));
+    addr++;
+    i++;
+  }
+  EEPROM.end();
+  return true;
+}
